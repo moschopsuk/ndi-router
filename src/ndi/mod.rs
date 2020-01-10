@@ -34,20 +34,6 @@ impl<'a> FindBuilder<'a> {
         }
     }
 
-    pub fn groups(self, groups: &'a str) -> Self {
-        Self {
-            groups: Some(groups),
-            ..self
-        }
-    }
-
-    pub fn extra_ips(self, extra_ips: &'a str) -> Self {
-        Self {
-            extra_ips: Some(extra_ips),
-            ..self
-        }
-    }
-
     pub fn build(self) -> Option<FindInstance> {
         let groups = self.groups.map(|s| ffi::CString::new(s).unwrap());
         let extra_ips = self.extra_ips.map(|s| ffi::CString::new(s).unwrap());

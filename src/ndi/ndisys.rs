@@ -11,11 +11,9 @@ extern "C" {
         p_create_settings: *const NDIlib_find_create_t,
     ) -> NDIlib_find_instance_t;
 
-    pub fn NDIlib_find_destroy(p_instance: NDIlib_find_instance_t);
-
-    pub fn NDIlib_routing_create(
-        p_create_settings: *const NDIlib_routing_create_t
-    ) -> NDIlib_routing_instance_t;
+    pub fn NDIlib_find_destroy(
+        p_instance: NDIlib_find_instance_t
+    );
 
     pub fn NDIlib_find_wait_for_sources(
         p_instance: NDIlib_find_instance_t,
@@ -26,6 +24,23 @@ extern "C" {
         p_instance: NDIlib_find_instance_t,
         p_no_sources: *mut u32,
     ) -> *const NDIlib_source_t;
+
+    pub fn NDIlib_routing_create(
+        p_create_settings: *const NDIlib_routing_create_t
+    ) -> NDIlib_routing_instance_t;
+
+    pub fn  NDIlib_routing_destroy(
+        p_instance: NDIlib_routing_instance_t
+    );
+
+    pub fn  NDIlib_routing_change(
+        p_instance: NDIlib_routing_instance_t,
+        p_source: NDIlib_source_t
+    );
+
+    pub fn  NDIlib_routing_clear(
+        p_instance: NDIlib_routing_instance_t
+    );
 }
 
 pub type NDIlib_find_instance_t = *mut ::std::os::raw::c_void;

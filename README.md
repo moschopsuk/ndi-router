@@ -8,6 +8,13 @@ cargo build
 cargo run
 ```
 
+### Usage
+The plan will be to use the Blackmagic videohub ethernet protocol as a way of setting routes.
+The format of the protocol is text commands over TCP.
+The attached documentation lists the protocol spec (pg 77). 
+
+The server can be access `127.0.0.1:9990`
+
 ## TODO
 - [x] Fetch NDI sources on network
 - [ ] Create TCP server to control

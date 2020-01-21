@@ -5,6 +5,6 @@ appenders:
     encoder:
       pattern: "{d(%Y-%m-%d %H:%M:%S %Z)(utc)} {h({l})} {m}{n}"
 root:
-  level: info
+  level: debug
   appenders:
     - stdout

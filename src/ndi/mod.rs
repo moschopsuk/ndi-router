@@ -6,7 +6,7 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
-use log::{debug};
+use log::{debug, info};
 
 pub fn initialize() -> bool {
     unsafe { NDIlib_initialize() }
@@ -150,6 +150,7 @@ pub enum Source<'a> {
 }
 
 unsafe impl<'a> Send for Source<'a> {}
+unsafe impl<'a> Sync for Source<'a> {}
 
 impl<'a> Source<'a> {
     pub fn ndi_name(&self) -> &str {
@@ -176,7 +177,7 @@ impl<'a> Source<'a> {
         }
     }
 
-    fn ndi_name_ptr(&self) -> *const ::std::os::raw::c_char {
+    pub fn ndi_name_ptr(&self) -> *const ::std::os::raw::c_char {
         unsafe {
             match *self {
                 Source::Borrowed(ptr, _) => ptr.as_ref().p_ndi_name,
@@ -260,7 +261,7 @@ impl<'a> RouteBuilder<'a> {
                 None
             } else {
                 Some(RouteInstance(Arc::new((
-                    RouteInstanceInner(ptr::NonNull::new_unchecked(ptr)),
+                    RouteInstanceInner(ptr::NonNull::new_unchecked(ptr), self.ndi_name.to_owned()),
                     Mutex::new(()),
                 ))))
             }
@@ -271,7 +272,7 @@ impl<'a> RouteBuilder<'a> {
 pub struct RouteInstance(Arc<(RouteInstanceInner, Mutex<()>)>);
 
 #[derive(Debug)]
-struct RouteInstanceInner(ptr::NonNull<::std::os::raw::c_void>);
+struct RouteInstanceInner(ptr::NonNull<::std::os::raw::c_void>, String);
 unsafe impl Send for RouteInstanceInner {}
 unsafe impl Sync for RouteInstanceInner {}
 
@@ -284,9 +285,10 @@ impl RouteInstance {
         }
     }
 
-    pub fn change(&self, source: Source) {
+    pub fn change(&self, source: &Source) {
         unsafe {
             let _lock = (self.0).1.lock().unwrap();
+            info!("routing {:?} to {:?}", source.ndi_name(), ((self.0).0).1);
             NDIlib_routing_change(
                 ((self.0).0).0.as_ptr(),
                 NDIlib_source_t {

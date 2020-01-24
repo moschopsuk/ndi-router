@@ -15,7 +15,7 @@ use std::mem;
 mod ndi;
 
 use futures::SinkExt;
-use ndi::{FindInstance, RouteInstance};
+use ndi::{FindInstance, RouteInstance, Source};
 use log::{error, info, debug};
 use log4rs;
 
@@ -44,6 +44,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let sources = find.get_current_sources();
 
     let mut outputs  = vec![];
+    let mut inputs = vec![];
     for x in 0..NUM_OUTPUTS {
         let name = format!("NDI output {}", x);
         let route = match RouteInstance::builder(name.as_str()).build() {
@@ -65,6 +66,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let label = source.ndi_name().to_owned();
             debug!("Adding source '{}' {}",  i, label);
             video_hub.set_input_label(i, label);
+            inputs.push(source.to_owned());
             i += 1;
         }
     } else {
@@ -72,7 +74,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(())
     }
 
-    let state = Arc::new(Mutex::new(Shared::new(video_hub, outputs)));
+    let state = Arc::new(Mutex::new(Shared::new(video_hub, inputs, outputs)));
 
     // Parse the arguments, bind the TCP socket we'll be listening to, spin up
     // our worker threads, and start shipping sockets to those worker threads.
@@ -115,6 +117,7 @@ type Rx = mpsc::UnboundedReceiver<String>;
 struct Shared {
     peers: HashMap<SocketAddr, Tx>,
     video_hub: videohub::VideoHub,
+    inputs: Vec<Source<'static>>,
     outputs: Vec<RouteInstance>,
 }
 
@@ -139,11 +142,12 @@ struct Peer {
 
 impl Shared {
     /// Create a new, empty, instance of `Shared`.
-    fn new(video_hub: VideoHub, outputs: Vec<RouteInstance>) -> Self {
+    fn new(video_hub: VideoHub, inputs: Vec<Source<'static>>, outputs: Vec<RouteInstance>) -> Self {
         Shared {
             peers: HashMap::new(),
             video_hub,
-            outputs
+            outputs,
+            inputs
         }
     }
 
@@ -254,7 +258,12 @@ async fn process(
                         peer.lines.send("ACK\n".to_owned()).await?
                     },
                     "VIDEO OUTPUT ROUTING:" => {
-                        println!("{}", msg[1]);
+                        let mut split = msg[1].split_whitespace();
+                        let state = state.lock().await;
+                        let source = state.inputs.get(split.next().unwrap().parse::<usize>().unwrap());
+                        let route = state.outputs.get(split.next().unwrap().parse::<usize>().unwrap());
+                        
+                        route.unwrap().change(source.unwrap());
                         peer.lines.send("ACK\n".to_owned()).await?
                     },
                     "VIDEO OUTPUT LOCKS:" => {

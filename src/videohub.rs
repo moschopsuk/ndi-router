@@ -24,7 +24,7 @@ impl VideoHub {
         VideoHub {
             input_lables: Vec::with_capacity(num_inputs),
             output_lables: intial_output_labels,
-            routes: HashMap::with_capacity(num_outputs),
+            routes: intial_routing,
             locks: intial_locks,
         }
     }
@@ -76,6 +76,8 @@ impl VideoHub {
     pub fn list_routes(self) -> String {
         let mut labels: Vec<String> = Vec::new();
         labels.push(format!("VIDEO OUTPUT ROUTING:"));
+
+        println!("{:?}", self.routes);
 
         for (input, output) in self.routes.iter() {
             labels.push(format!("{} {}", input, output));

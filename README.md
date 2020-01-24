@@ -17,6 +17,6 @@ The server can be accessed at `127.0.0.1:9990`.
 
 ## TODO
 - [x] Fetch NDI sources on network
-- [ ] Create TCP server to control
+- [X] Create TCP server to control
 - [ ] Using NDI routing API to foreward sources
-- [ ] Make compatible with BMD videohub spec
+- [X] Make compatible with BMD videohub spec

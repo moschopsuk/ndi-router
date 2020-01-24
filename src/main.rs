@@ -15,9 +15,12 @@ use std::mem;
 mod ndi;
 
 use futures::SinkExt;
-use ndi::{FindInstance, Source};
-use log::{error, info, warn};
+use ndi::{FindInstance};
+use log::{error, info, debug};
 use log4rs;
+
+mod videohub;
+use videohub::VideoHub;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -90,8 +93,7 @@ type Rx = mpsc::UnboundedReceiver<String>;
 /// `Tx`.
 struct Shared {
     peers: HashMap<SocketAddr, Tx>,
-    ndi_sources: HashMap<u8, String>,
-    routing: HashMap<u8, u8>,
+    videohub: videohub::VideoHub,
 }
 
 struct Peer {
@@ -103,6 +105,8 @@ struct Peer {
     lines: Framed<TcpStream, LinesCodec>,
 
     buf: Vec<String>,
+
+    addr: SocketAddr,
 
     /// Receive half of the message channel.
     ///
@@ -116,8 +120,7 @@ impl Shared {
     fn new() -> Self {
         Shared {
             peers: HashMap::new(),
-            ndi_sources: HashMap::new(),
-            routing: HashMap::new()
+            videohub : VideoHub::new(16, 16),
         }
     }
 
@@ -150,7 +153,7 @@ impl Peer {
         // Add an entry for this `Peer` in the shared state map.
         state.lock().await.peers.insert(addr, tx);
 
-        Ok(Peer { lines, buf, rx })
+        Ok(Peer { lines, buf, rx, addr })
     }
 }
 
@@ -200,45 +203,18 @@ async fn process(
     
     let mut lines = Framed::new(stream, LinesCodec::new());
 
-    let mut device_info: Vec<String> = Vec::new();
-    device_info.push(String::from("PROTOCOL PREAMBLE:"));
-    device_info.push(format!("Version: {}", 2.7));
-    device_info.push(format!(""));
-    device_info.push(format!("VIDEOHUB DEVICE:"));
-    device_info.push(format!("Device present: true"));
-    device_info.push(format!("Model name: Blackmagic Smart Videohub"));
-    device_info.push(format!("Video inputs: 16"));
-    device_info.push(format!("Video processing units: 0"));
-    device_info.push(format!("Video outputs: 16"));
-    device_info.push(format!("Video monitoring outputs: 0"));
-    device_info.push(format!("Serial ports: 0"));
-    device_info.push(format!(""));
 
-    device_info.push(format!("INPUT LABELS:"));
-    for x in 0..16 {
-        device_info.push(format!("{} NDI Input {}", x, (x + 1)));
-    }
-    device_info.push(format!(""));
+    let video_hub = state.lock().await.videohub.clone();
+    let mut initial_dump: Vec<String> = Vec::new();
 
-    device_info.push(format!("OUTPUT LABELS:"));
-    for x in 0..16 {
-        device_info.push(format!("{} NDI Output {}", x, (x + 1)));
-    }
-    device_info.push(format!(""));
+    initial_dump.push(video_hub.clone().preamble());
+    initial_dump.push(video_hub.clone().device_info());
+    initial_dump.push(video_hub.clone().list_inputs());
+    initial_dump.push(video_hub.clone().list_outputs());
+    initial_dump.push(video_hub.clone().list_routes());
+    initial_dump.push(video_hub.clone().list_locks());
 
-    device_info.push(format!("VIDEO OUTPUT ROUTING:"));
-    for x in 0..16 {
-        device_info.push(format!("{} {}", 0, (x + 1)));
-    }
-    device_info.push(format!(""));
-
-    device_info.push(format!("VIDEO OUTPUT LOCKS:"));
-    for x in 0..16 {
-        device_info.push(format!("{} U", x));
-    }
-    device_info.push(format!(""));
-
-    lines.send(device_info.join("\n")).await?;
+    lines.send(initial_dump.join("")).await?;
 
 
     // Register our peer with state which internally sets up some channels.
@@ -253,10 +229,17 @@ async fn process(
                 println!("Broadcast {:?}", msg);
                 match msg[0].as_str() {
                     "PING:" => {
-                        info!("sending ACK to client");
+                        debug!("sending ACK to {}", peer.addr);
                         peer.lines.send("ACK\n".to_owned()).await?
                     },
-                    "VIDEO OUTPUT ROUTING:" => println!("{}", msg[1]),
+                    "VIDEO OUTPUT ROUTING:" => {
+                        println!("{}", msg[1]);
+                        peer.lines.send("ACK\n".to_owned()).await?
+                    },
+                    "VIDEO OUTPUT LOCKS:" => {
+                        println!("{}", msg[1]);
+                        peer.lines.send("ACK\n".to_owned()).await?
+                    }
                     _ => (),
                 }
             },
@@ -272,7 +255,7 @@ async fn process(
     // If this section is reached it means that the client was disconnected!
     // Let's let everyone still connected know about it.
     {
-        println!("Client Disconnected");
+        info!("Client {} Disconnected", addr);
         let mut state = state.lock().await;
         state.peers.remove(&addr);
     }

@@ -15,7 +15,7 @@ use std::mem;
 mod ndi;
 
 use futures::SinkExt;
-use ndi::{FindInstance};
+use ndi::{FindInstance, RouteInstance};
 use log::{error, info, debug};
 use log4rs;
 
@@ -23,6 +23,7 @@ mod videohub;
 use videohub::VideoHub;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const NUM_OUTPUTS: usize = 16;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -35,13 +36,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let mut find = match FindInstance::builder().build() {
-        None => panic!(Some("Cannot initialize NDI libs")),
+        None => panic!(Some("Cannot initialize NDI finder")),
         Some(find) => find,
     };
 
     let new_sources = find.wait_for_sources(100);
     let sources = find.get_current_sources();
-    let mut video_hub = VideoHub::new(sources.len(), 16);
+
+    let mut outputs  = vec![];
+    for x in 0..NUM_OUTPUTS {
+        let name = format!("NDI output {}", x);
+        let route = match RouteInstance::builder(name.as_str()).build() {
+            None => panic!(Some("Cannot create NDI route")),
+            Some(find) => find,
+        };
+
+        outputs.push(route);
+    }
+
+
+    let mut video_hub = VideoHub::new(sources.len(), NUM_OUTPUTS);
 
     debug!("Found {} NDI sources", sources.len());
 
@@ -58,7 +72,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(())
     }
 
-    let state = Arc::new(Mutex::new(Shared::new(video_hub)));
+    let state = Arc::new(Mutex::new(Shared::new(video_hub, outputs)));
 
     // Parse the arguments, bind the TCP socket we'll be listening to, spin up
     // our worker threads, and start shipping sockets to those worker threads.
@@ -100,7 +114,8 @@ type Rx = mpsc::UnboundedReceiver<String>;
 /// `Tx`.
 struct Shared {
     peers: HashMap<SocketAddr, Tx>,
-    videohub: videohub::VideoHub,
+    video_hub: videohub::VideoHub,
+    outputs: Vec<RouteInstance>,
 }
 
 struct Peer {
@@ -124,10 +139,11 @@ struct Peer {
 
 impl Shared {
     /// Create a new, empty, instance of `Shared`.
-    fn new(video_hub: VideoHub) -> Self {
+    fn new(video_hub: VideoHub, outputs: Vec<RouteInstance>) -> Self {
         Shared {
             peers: HashMap::new(),
-            videohub : video_hub,
+            video_hub,
+            outputs
         }
     }
 
@@ -211,7 +227,7 @@ async fn process(
     let mut lines = Framed::new(stream, LinesCodec::new());
 
 
-    let video_hub = state.lock().await.videohub.clone();
+    let video_hub = state.lock().await.video_hub.clone();
     let mut initial_dump: Vec<String> = Vec::new();
 
     initial_dump.push(video_hub.clone().preamble());
@@ -232,7 +248,6 @@ async fn process(
             // A message was received from the current user, we should
             // broadcast this message to the other users.
             Ok(Message::Broadcast(msg)) => {
-                println!("Broadcast {:?}", msg);
                 match msg[0].as_str() {
                     "PING:" => {
                         debug!("sending ACK to {}", peer.addr);

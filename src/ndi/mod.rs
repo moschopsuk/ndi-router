@@ -6,6 +6,8 @@ use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
 
+use log::{debug};
+
 pub fn initialize() -> bool {
     unsafe { NDIlib_initialize() }
 }
@@ -251,6 +253,8 @@ impl<'a> RouteBuilder<'a> {
                 p_ndi_name: ndi_name.as_ptr(),
                 p_groups: groups.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null()),
             });
+
+            debug!("creating NDI source {}", self.ndi_name);
 
             if ptr.is_null() {
                 None

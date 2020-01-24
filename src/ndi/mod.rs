@@ -174,21 +174,20 @@ impl<'a> Source<'a> {
         }
     }
 
-    fn as_ptr(&self) -> NDIlib_source_t {
+    fn ndi_name_ptr(&self) -> *const ::std::os::raw::c_char {
         unsafe {
-            let (ndi_name, ip_address) = match *self {
-                Source::Borrowed(ptr, _) => (ptr.as_ref().p_ndi_name, ptr.as_ref().p_ip_address),
-                Source::Owned(_, ref ndi_name, ref ip_address) => {
-                    (ndi_name.as_ptr(), ip_address.as_ptr())
-                }
-            };
+            match *self {
+                Source::Borrowed(ptr, _) => ptr.as_ref().p_ndi_name,
+                Source::Owned(_, ref ndi_name, _) => ndi_name.as_ptr(),
+            }
+        }
+    }
 
-            let ndi_name = ffi::CString::new(ffi::CStr::from_ptr(ndi_name).to_bytes()).unwrap();
-            let ip_address = ffi::CString::new(ffi::CStr::from_ptr(ip_address).to_bytes()).unwrap();
-
-            NDIlib_source_t {
-                p_ndi_name: ndi_name.as_ptr(),
-                p_ip_address: ip_address.as_ptr(),
+    fn ip_address_ptr(&self) -> *const ::std::os::raw::c_char {
+        unsafe {
+            match *self {
+                Source::Borrowed(ptr, _) => ptr.as_ref().p_ip_address,
+                Source::Owned(_, _, ref ip_address) => ip_address.as_ptr(),
             }
         }
     }
@@ -284,7 +283,12 @@ impl RouteInstance {
     pub fn change(&self, source: Source) {
         unsafe {
             let _lock = (self.0).1.lock().unwrap();
-            NDIlib_routing_change(((self.0).0).0.as_ptr(), source.as_ptr());
+            NDIlib_routing_change(
+                ((self.0).0).0.as_ptr(),
+                NDIlib_source_t {
+                    p_ndi_name: source.ndi_name_ptr(),
+                    p_ip_address: source.ip_address_ptr(),
+                });
         }
     }
 

@@ -41,17 +41,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let new_sources = find.wait_for_sources(100);
     let sources = find.get_current_sources();
+    let mut video_hub = VideoHub::new(sources.len(), 16);
+
+    debug!("Found {} NDI sources", sources.len());
 
     if new_sources {
+        let mut i : usize = 0;
         for source in &sources {
-            info!("Found source '{}' with IP {}",  source.ndi_name(), source.ip_address());
+            let label = source.ndi_name().to_owned();
+            debug!("Adding source '{}' {}",  i, label);
+            video_hub.set_input_label(i, label);
+            i += 1;
         }
     } else {
         error!("No NDI sources found");
         return Ok(())
     }
 
-    let state = Arc::new(Mutex::new(Shared::new()));
+    let state = Arc::new(Mutex::new(Shared::new(video_hub)));
 
     // Parse the arguments, bind the TCP socket we'll be listening to, spin up
     // our worker threads, and start shipping sockets to those worker threads.
@@ -117,10 +124,10 @@ struct Peer {
 
 impl Shared {
     /// Create a new, empty, instance of `Shared`.
-    fn new() -> Self {
+    fn new(video_hub: VideoHub) -> Self {
         Shared {
             peers: HashMap::new(),
-            videohub : VideoHub::new(16, 16),
+            videohub : video_hub,
         }
     }
 
@@ -215,7 +222,6 @@ async fn process(
     initial_dump.push(video_hub.clone().list_locks());
 
     lines.send(initial_dump.join("")).await?;
-
 
     // Register our peer with state which internally sets up some channels.
     let mut peer = Peer::new(state.clone(), lines).await?;

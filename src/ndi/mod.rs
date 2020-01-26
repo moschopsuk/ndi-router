@@ -249,7 +249,7 @@ impl<'a> RouteBuilder<'a> {
         unsafe {
             let ndi_name = ffi::CString::new(self.ndi_name).unwrap();
             let groups = self.groups.map(|s| ffi::CString::new(s).unwrap());
-
+            
             let ptr = NDIlib_routing_create(&NDIlib_routing_create_t {
                 p_ndi_name: ndi_name.as_ptr(),
                 p_groups: groups.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null()),
@@ -298,7 +298,7 @@ impl RouteInstance {
         }
     }
 
-    pub fn clear(&self) {
+    pub fn _clear(&self) {
         unsafe {
             let _lock = (self.0).1.lock().unwrap();
             NDIlib_routing_clear(((self.0).0).0.as_ptr());

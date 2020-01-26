@@ -42,9 +42,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let new_sources = find.wait_for_sources(100);
     let sources = find.get_current_sources();
-
     let mut outputs  = vec![];
     let mut inputs = vec![];
+    let mut video_hub = VideoHub::new(sources.len(), NUM_OUTPUTS);
+
+    info!("Found {} NDI sources", sources.len());
+
+    if new_sources {
+        let mut i : usize = 0;
+        for source in &sources {
+            let label = source.ndi_name().to_owned();
+            let ip = source.ip_address().to_owned();
+            debug!("Found source '{}' {} ({})",  i, label, ip);
+            video_hub.set_input_label(i, label);
+            inputs.push(source.to_owned());
+            i += 1;
+        }
+    } else {
+        error!("No NDI sources found");
+        return Ok(())
+    }
+
     for x in 0..NUM_OUTPUTS {
         let name = format!("NDI output {}", x);
         let route = match RouteInstance::builder(name.as_str()).build() {
@@ -53,25 +71,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
 
         outputs.push(route);
-    }
-
-
-    let mut video_hub = VideoHub::new(sources.len(), NUM_OUTPUTS);
-
-    debug!("Found {} NDI sources", sources.len());
-
-    if new_sources {
-        let mut i : usize = 0;
-        for source in &sources {
-            let label = source.ndi_name().to_owned();
-            debug!("Adding source '{}' {}",  i, label);
-            video_hub.set_input_label(i, label);
-            inputs.push(source.to_owned());
-            i += 1;
-        }
-    } else {
-        error!("No NDI sources found");
-        return Ok(())
     }
 
     let state = Arc::new(Mutex::new(Shared::new(video_hub, inputs, outputs)));

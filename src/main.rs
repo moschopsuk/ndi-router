@@ -260,8 +260,8 @@ async fn process(
                     "VIDEO OUTPUT ROUTING:" => {
                         let mut split = msg[1].split_whitespace();
                         let state = state.lock().await;
-                        let source = state.inputs.get(split.next().unwrap().parse::<usize>().unwrap());
                         let route = state.outputs.get(split.next().unwrap().parse::<usize>().unwrap());
+                        let source = state.inputs.get(split.next().unwrap().parse::<usize>().unwrap());
                         
                         route.unwrap().change(source.unwrap());
                         peer.lines.send("ACK\n".to_owned()).await?

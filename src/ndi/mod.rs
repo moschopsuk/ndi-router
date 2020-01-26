@@ -291,7 +291,7 @@ impl RouteInstance {
             info!("routing {:?} to {:?}", source.ndi_name(), ((self.0).0).1);
             NDIlib_routing_change(
                 ((self.0).0).0.as_ptr(),
-                NDIlib_source_t {
+                &NDIlib_source_t {
                     p_ndi_name: source.ndi_name_ptr(),
                     p_ip_address: source.ip_address_ptr(),
                 });

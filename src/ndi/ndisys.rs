@@ -35,7 +35,7 @@ extern "C" {
 
     pub fn  NDIlib_routing_change(
         p_instance: NDIlib_routing_instance_t,
-        p_source: NDIlib_source_t
+        p_source: *const NDIlib_source_t
     );
 
     pub fn  NDIlib_routing_clear(

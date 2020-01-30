@@ -298,7 +298,7 @@ impl RouteInstance {
         }
     }
 
-    pub fn _clear(&self) {
+    pub fn clear(&self) {
         unsafe {
             let _lock = (self.0).1.lock().unwrap();
             NDIlib_routing_clear(((self.0).0).0.as_ptr());

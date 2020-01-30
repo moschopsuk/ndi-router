@@ -186,7 +186,9 @@ impl Peer {
 #[derive(Debug)]
 enum Message {
     /// A message that should be broadcasted to others.
-    Broadcast(Vec<String>),
+    Received(Vec<String>),
+
+    Broadcast(String),
 }
 
 // Peer implements `Stream` in a way that polls both the `Rx`, and `Framed` types.
@@ -196,6 +198,10 @@ impl Stream for Peer {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 
+        if let Poll::Ready(Some(v)) = Pin::new(&mut self.rx).poll_next(cx) {
+            return Poll::Ready(Some(Ok(Message::Broadcast(v))));
+        }
+
         // Secondly poll the `Framed` stream.
         let result: Option<_> = futures::ready!(Pin::new(&mut self.lines).poll_next(cx));
 
@@ -203,10 +209,10 @@ impl Stream for Peer {
             // We've received a message we should broadcast to others.
             Some(Ok(message)) => {
                 if message == "" {
-                    Some(Ok(Message::Broadcast(mem::replace(&mut self.buf, vec![]))))
+                    Some(Ok(Message::Received(mem::replace(&mut self.buf, vec![]))))
                 } else {
                     self.buf.push(message);
-                    Some(Ok(Message::Broadcast(vec!["None".to_owned()])))
+                    Some(Ok(Message::Received(vec!["None".to_owned()])))
                 }
             },
 
@@ -231,7 +237,7 @@ async fn process(
 
 
     let video_hub = state.lock().await.video_hub.clone();
-    let mut initial_dump: Vec<String> = Vec::new();
+    let mut initial_dump = Vec::new();
 
     initial_dump.push(video_hub.clone().preamble());
     initial_dump.push(video_hub.clone().device_info());
@@ -250,7 +256,7 @@ async fn process(
         match result {
             // A message was received from the current user, we should
             // broadcast this message to the other users.
-            Ok(Message::Broadcast(msg)) => {
+            Ok(Message::Received(msg)) => {
                 match msg[0].as_str() {
                     "PING:" => {
                         debug!("sending ACK to {}", peer.addr);
@@ -258,11 +264,14 @@ async fn process(
                     },
                     "VIDEO OUTPUT ROUTING:" => {
                         let mut split = msg[1].split_whitespace();
-                        let state = state.lock().await;
+                        let mut state = state.lock().await;
                         let route = state.outputs.get(split.next().unwrap().parse::<usize>().unwrap());
                         let source = state.inputs.get(split.next().unwrap().parse::<usize>().unwrap());
                         
+                        route.unwrap().clear();
                         route.unwrap().change(source.unwrap());
+                        let update = format!("{}\n{}\n\n", msg[0], msg[1]);
+                        state.broadcast(addr, &update).await;
                         peer.lines.send("ACK\n".to_owned()).await?
                     },
                     "VIDEO OUTPUT LOCKS:" => {
@@ -272,6 +281,9 @@ async fn process(
                     _ => (),
                 }
             },
+            Ok(Message::Broadcast(msg)) => {
+                peer.lines.send(msg).await?;
+            }
             Err(e) => {
                 println!(
                     "an error occured while processing messages error = {:?}",

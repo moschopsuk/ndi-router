@@ -20,5 +20,5 @@ The server can be accessed at `127.0.0.1:9990`.
 - [X] Create TCP server to control
 - [X] Using NDI routing API to foreward sources
 - [X] Make compatible with BMD videohub spec
-- [ ] Handle Multiple clients
+- [X] Handle Multiple clients
 - [ ] Handle output locking

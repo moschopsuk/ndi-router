@@ -257,7 +257,8 @@ async fn process(
             // A message was received from the current user, we should
             // broadcast this message to the other users.
             Ok(Message::Received(msg)) => {
-                match msg[0].as_str() {
+                let command = msg.first().unwrap().as_str();
+                match command {
                     "PING:" => {
                         debug!("sending ACK to {}", peer.addr);
                         peer.lines.send("ACK\n".to_owned()).await?
@@ -270,7 +271,7 @@ async fn process(
                         
                         route.unwrap().clear();
                         route.unwrap().change(source.unwrap());
-                        let update = format!("{}\n{}\n\n", msg[0], msg[1]);
+                        let update = format!("{}\n{}\n\n", command, msg[1]);
                         state.broadcast(addr, &update).await;
                         peer.lines.send("ACK\n".to_owned()).await?
                     },

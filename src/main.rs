@@ -1,26 +1,30 @@
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex};
 use tokio::stream::{Stream, StreamExt};
 use tokio_util::codec::{Framed, LinesCodec, LinesCodecError};
 
 use std::{env, error::Error};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::io;
 use std::task::{Context, Poll};
 use std::mem;
 
 mod ndi;
 
 use futures::SinkExt;
-use ndi::{FindInstance, RouteInstance, Source};
+use ndi::{FindInstance, RouteInstance};
 use log::{error, info, debug};
 use log4rs;
 
 mod videohub;
 use videohub::VideoHub;
+
+mod peer;
+use peer::Peer;
+
+mod shared;
+use shared::Shared;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const NUM_OUTPUTS: usize = 16;
@@ -101,90 +105,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-/// Shorthand for the transmit half of the message channel.
-type Tx = mpsc::UnboundedSender<String>;
-
-/// Shorthand for the receive half of the message channel.
-type Rx = mpsc::UnboundedReceiver<String>;
-
-/// Data that is shared between all peers in the chat server.
-///
-/// This is the set of `Tx` handles for all connected clients. Whenever a
-/// message is received from a client, it is broadcasted to all peers by
-/// iterating over the `peers` entries and sending a copy of the message on each
-/// `Tx`.
-struct Shared {
-    peers: HashMap<SocketAddr, Tx>,
-    video_hub: videohub::VideoHub,
-    inputs: Vec<Source<'static>>,
-    outputs: Vec<RouteInstance>,
-}
-
-struct Peer {
-    /// The TCP socket wrapped with the `Lines` codec, defined below.
-    ///
-    /// This handles sending and receiving data on the socket. When using
-    /// `Lines`, we can work at the line level instead of having to manage the
-    /// raw byte operations.
-    lines: Framed<TcpStream, LinesCodec>,
-
-    buf: Vec<String>,
-
-    addr: SocketAddr,
-
-    /// Receive half of the message channel.
-    ///
-    /// This is used to receive messages from peers. When a message is received
-    /// off of this `Rx`, it will be written to the socket.
-    rx: Rx,
-}
-
-impl Shared {
-    /// Create a new, empty, instance of `Shared`.
-    fn new(video_hub: VideoHub, inputs: Vec<Source<'static>>, outputs: Vec<RouteInstance>) -> Self {
-        Shared {
-            peers: HashMap::new(),
-            video_hub,
-            outputs,
-            inputs
-        }
-    }
-
-    /// Send a `LineCodec` encoded message to every peer, except
-    /// for the sender.
-    async fn broadcast(&mut self, sender: SocketAddr, message: &str) {
-        for peer in self.peers.iter_mut() {
-            if *peer.0 != sender {
-                let _ = peer.1.send(message.into());
-            }
-        }
-    }
-}
-
-/// The state for each connected client.
-impl Peer {
-    /// Create a new instance of `Peer`.
-    async fn new(
-        state: Arc<Mutex<Shared>>,
-        lines: Framed<TcpStream, LinesCodec>,
-    ) -> io::Result<Peer> {
-        // Get the client socket address
-        let addr = lines.get_ref().peer_addr()?;
-
-        // Create a channel for this peer
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        let buf = Vec::new();
-
-        // Add an entry for this `Peer` in the shared state map.
-        state.lock().await.peers.insert(addr, tx);
-
-        Ok(Peer { lines, buf, rx, addr })
-    }
-}
-
 #[derive(Debug)]
-enum Message {
+pub enum Message {
     /// A message that should be broadcasted to others.
     Received(Vec<String>),
 

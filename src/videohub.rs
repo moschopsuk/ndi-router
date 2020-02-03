@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 #[derive(Clone)]
 pub struct VideoHub {
     input_lables: Vec<String>,
     output_lables: Vec<String>,
     routes: HashMap<u8, u8>,
-    locks: Vec<bool>,
+    locks: HashMap<u8, Option<SocketAddr>>,
 }
 
 impl VideoHub {
@@ -13,7 +14,7 @@ impl VideoHub {
         let mut intial_routing: HashMap<u8, u8> = HashMap::with_capacity(num_outputs);
         let mut intial_output_labels = Vec::with_capacity(num_outputs);
         let mut intial_input_labels = Vec::with_capacity(num_inputs);
-        let mut intial_locks = Vec::with_capacity(num_outputs);
+        let mut intial_locks = HashMap::with_capacity(num_outputs);
 
         for x in 0..num_inputs {
             intial_input_labels.push(format!("NDI Input {}", x));
@@ -22,7 +23,7 @@ impl VideoHub {
         for x in 0..num_outputs {
             intial_routing.insert(x as u8, x as u8);
             intial_output_labels.push(format!("NDI Output {}", x));
-            intial_locks.push(false);
+            intial_locks.insert(x as u8, None);
         }
 
         VideoHub {
@@ -93,9 +94,9 @@ impl VideoHub {
         let mut labels: Vec<String> = Vec::new();
         labels.push(format!("VIDEO OUTPUT LOCKS:"));
 
-        for (i, lock) in self.locks.iter().enumerate() {
-            let state = if *lock { "L" } else { "U" };
-            labels.push(format!("{} {}", i, state));
+        for (i, _) in self.locks.iter() {
+            // let state = if *lock { "L" } else { "U" };
+            labels.push(format!("{} {}", i, "U"));
         }
 
         labels.push(format!("\n"));

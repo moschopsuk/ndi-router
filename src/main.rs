@@ -2,29 +2,24 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex};
 use tokio::stream::{Stream, StreamExt};
 use tokio_util::codec::{Framed, LinesCodec, LinesCodecError};
-
-use std::{env, error::Error};
+use log4rs;
+use futures::SinkExt;
+use log::{error, info, debug};
+use std::{env, error::Error, mem};
 use std::sync::Arc;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::mem;
 
 mod ndi;
-
-use futures::SinkExt;
-use ndi::{FindInstance, RouteInstance};
-use log::{error, info, debug};
-use log4rs;
-
 mod videohub;
-use videohub::VideoHub;
-
 mod peer;
-use peer::Peer;
-
 mod shared;
-use shared::Shared;
+
+use crate::videohub::{VideoHub};
+use crate::peer::{Peer};
+use crate::shared::{Shared};
+use crate::ndi::{FindInstance, RouteInstance};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const NUM_OUTPUTS: usize = 16;
@@ -156,8 +151,6 @@ async fn process(
     info!("New videohub controller connected: {}", addr);
     
     let mut lines = Framed::new(stream, LinesCodec::new());
-
-
     let video_hub = state.lock().await.video_hub.clone();
     lines.send(video_hub.inital_status_dump()).await?;
 

@@ -3,8 +3,8 @@ appenders:
   stdout:
     kind: console
     encoder:
-      pattern: "{d(%Y-%m-%d %H:%M:%S %Z)(utc)} {h({l})} {m}{n}"
+      pattern: "{d(%Y-%m-%d %H:%M:%S %Z)(utc)} {h([{l}])} {m}{n}"
 root:
-  level: debug
+  level: info
   appenders:
     - stdout

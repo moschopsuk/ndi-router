@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         panic!("Cannot initialize NDI libs");
     }
 
-    let mut find = match FindInstance::builder().build() {
+    let mut find = match FindInstance::builder().show_local_sources(true).build() {
         None => panic!(Some("Cannot initialize NDI finder")),
         Some(find) => find,
     };
@@ -159,16 +159,7 @@ async fn process(
 
 
     let video_hub = state.lock().await.video_hub.clone();
-    let mut initial_dump = Vec::new();
-
-    initial_dump.push(video_hub.clone().preamble());
-    initial_dump.push(video_hub.clone().device_info());
-    initial_dump.push(video_hub.clone().list_inputs());
-    initial_dump.push(video_hub.clone().list_outputs());
-    initial_dump.push(video_hub.clone().list_routes());
-    initial_dump.push(video_hub.clone().list_locks());
-
-    lines.send(initial_dump.join("")).await?;
+    lines.send(video_hub.inital_status_dump()).await?;
 
     // Register our peer with state which internally sets up some channels.
     let mut peer = Peer::new(state.clone(), lines).await?;

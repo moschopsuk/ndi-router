@@ -106,4 +106,17 @@ impl VideoHub {
     pub fn set_input_label(&mut self, index: usize, label: String) {
         std::mem::replace(&mut self.input_lables[index], label);
     }
+
+    pub fn inital_status_dump(self) -> String {
+        let mut initial_dump = Vec::new();
+
+        initial_dump.push(self.clone().preamble());
+        initial_dump.push(self.clone().device_info());
+        initial_dump.push(self.clone().list_inputs());
+        initial_dump.push(self.clone().list_outputs());
+        initial_dump.push(self.clone().list_routes());
+        initial_dump.push(self.clone().list_locks());
+    
+        initial_dump.join("")
+    }
 }
